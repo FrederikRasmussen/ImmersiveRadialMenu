@@ -1,15 +1,13 @@
 package immersiveradialmenu.client;
 
 import java.util.List;
-import java.util.function.Predicate;
-
-import com.google.common.collect.Lists;
 
 import org.lwjgl.opengl.GL11;
 
+import immersiveradialmenu.Category;
 import immersiveradialmenu.ImmersiveRadialMenu;
-import immersiveradialmenu.network.SwapItems;
 import immersiveradialmenu.ToolboxFinder;
+import immersiveradialmenu.network.SwapItems;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -31,260 +29,245 @@ import net.minecraftforge.items.IItemHandler;
 
 @Mod.EventBusSubscriber(Side.CLIENT)
 public class GuiRadialMenu extends GuiScreen {
-  private KeyBinding keybinding;
-  private Predicate<ItemStack> predicate;
-  private int minSlot;
-  private int maxSlot;
-  private IItemHandler toolbox;
+  private static final float PRECISION = 5.0f;
 
-  private List<ItemStack> cachedStacks;
+  private KeyBinding keybinding;
 
   private boolean closing;
   private boolean doneClosing;
+
   private double startAnimation;
 
+  private Category selectedCategory;
   private int selectedItem;
 
   GuiRadialMenu(
-    KeyBinding keybinding,
-    Predicate<ItemStack> predicate,
-    int minSlot,
-    int maxSlot
+    KeyBinding keybinding
   ) {
     this.keybinding = keybinding;
-    this.predicate = predicate;
-    this.minSlot = minSlot;
-    this.maxSlot = maxSlot;
-
-    Minecraft mc = Minecraft.getMinecraft();
-    this.toolbox = ToolboxFinder.findToolbox(mc.player);
-
-    this.cachedStacks = null;
 
     this.closing = false;
     this.doneClosing = false;
-    this.startAnimation = mc.world.getTotalWorldTime()
-        + (double) mc.getRenderPartialTicks();
 
-    selectedItem = -1;
+    Minecraft mc = Minecraft.getMinecraft();
+    this.startAnimation =
+        mc.world.getTotalWorldTime() + (double) mc.getRenderPartialTicks();
+    
+    this.selectedCategory = null;
+    this.selectedItem = -1;
   }
 
   @SubscribeEvent
   public static void overlayEvent(
     RenderGameOverlayEvent.Pre event
   ) {
-    ElementType type = event.getType();
-    if (type != RenderGameOverlayEvent.ElementType.CROSSHAIRS)
-      return;
-    Minecraft mc = Minecraft.getMinecraft();
-    if (mc.currentScreen instanceof GuiRadialMenu)
-      event.setCanceled(true);
+    if (Minecraft.getMinecraft().currentScreen instanceof GuiRadialMenu) {
+      if (event.getType() == RenderGameOverlayEvent.ElementType.CROSSHAIRS) {
+        event.setCanceled(true);
+      }
+    }
+  }
+
+  @Override
+  protected void mouseReleased(
+    int mouseX,
+    int mouseY,
+    int state
+  ) {
+      super.mouseReleased(mouseX, mouseY, state);
+      List<Category> categories = mainHandCategories();
+      processClick(true, categories);
   }
 
   @Override
   public void updateScreen() {
     super.updateScreen();
-
-    if (closing)
-      if (doneClosing || toolbox == null) {
-        mc.displayGuiScreen(null);
-        ClientProxy.wipeOpen();
-      }
-
-    ItemStack inHand = mc.player.getHeldItemMainhand();
-    if (!predicate.test(inHand))
-      toolbox = null;
-    if (toolbox == null)
+    List<Category> categories = mainHandCategories();
+    if (selectedCategory == null && categories.size() <= 2) {
+      selectedCategory = categories.get(0);
+    }
+    if (!hasToolbox() || categories.isEmpty() || closing && doneClosing) {
       mc.displayGuiScreen(null);
-    else if (!GameSettings.isKeyDown(keybinding))
-      processClick(false);
-  }
-
-  @Override
-  protected void mouseReleased(int mouseX, int mouseY, int state) {
-      super.mouseReleased(mouseX, mouseY, state);
-      processClick(true);
-  }
-
-  protected void processClick(boolean triggeredByMouse) {
-    if (closing)
-      return;
-    if (toolbox == null)
-      return;
-    ItemStack inHand = mc.player.getHeldItemMainhand();
-    if (!predicate.test(inHand))
-      return;
-    
-    List<Integer> items = Lists.newArrayList();
-    for (int i = minSlot; i < maxSlot; i++)
-      items.add(i);
-
-    int numItems = items.size();
-    if (numItems <= 0)
-      return;
-    
-    if (selectedItem >= 0) {
-      int swapWith = items.get(selectedItem);
-      int inHandCount = inHand.getCount();
-      int toolboxSlotCount = toolbox.getStackInSlot(swapWith).getCount();
-      if (inHandCount <= 0 && toolboxSlotCount <= 0 && triggeredByMouse)
-        return;
-      else {
-        SwapItems.swapItem(swapWith, mc.player);
-        ImmersiveRadialMenu.channel.sendToServer(new SwapItems(swapWith));
+      ClientProxy.wipeOpen();
+    } else if (!closing && !GameSettings.isKeyDown(keybinding)) {
+      processClick(false, categories);
+      if (!closing) {
+        animateClose();
       }
     }
-
-    animateClose();
   }
 
-  private void animateClose() {
-      closing = true;
-      doneClosing = false;
-      startAnimation =
-          Minecraft.getMinecraft().world.getTotalWorldTime()
-          + (double) Minecraft.getMinecraft().getRenderPartialTicks();
-  }
-
-
-  @Override
-  public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-    super.drawScreen(mouseX, mouseY, partialTicks);
-
-    if (toolbox == null)
-      return;
-    
-    List<ItemStack> items = cachedStacks;
-    if (items == null) {
-      items = Lists.newArrayList();
-      for (int i = minSlot; i < maxSlot; i++) {
-        ItemStack inSlot = toolbox.getStackInSlot(i);
-        items.add(inSlot);
-      }
-      cachedStacks = items;
-    }
-
-    ItemStack inHand = mc.player.getHeldItemMainhand();
-    if (!predicate.test(inHand))
-      return;
-    
-    int numItems = items.size();
-    if (numItems <= 0) {
-      drawCenteredString(
-        fontRenderer,
-        I18n.format("text.immersiveradialmenu.empty"),
-        width / 2,
-        (height - fontRenderer.FONT_HEIGHT) / 2,
-        0xFFFFFFFF
-      );
-      if (closing)
-        doneClosing = true;
-      return;
-    }
-    
-    final float OPEN_ANIMATION_LENGTH = 2.5f;
-    long worldTime = Minecraft.getMinecraft().world.getTotalWorldTime();
-    float animationTime = (float) (worldTime + partialTicks - startAnimation);
-    float openAnimation =
-        closing
-        ? 1.0f - animationTime / OPEN_ANIMATION_LENGTH
-        : animationTime / OPEN_ANIMATION_LENGTH;
-    
-    if (closing && openAnimation <= 0.0f)
-      doneClosing = true;
-    
-    float animProgress = MathHelper.clamp(openAnimation, 0, 1);
-    float radiusIn = Math.max(0.1f, 30 * animProgress);
-    float radiusOut = radiusIn * 2;
-    float itemRadius = (radiusIn + radiusOut) * 0.5f;
-    float animTop = (1 - animProgress) * height / 2.0f;
-
-    int x = width / 2;
-    int y = height / 2;
-
-    double a = Math.toDegrees(Math.atan2(mouseY - y, mouseX - x));
-    double d = Math.sqrt(Math.pow(mouseX - x, 2) + Math.pow(mouseY - y, 2));
-    float s0 = (((0 - 0.5f) / (float) numItems) + 0.25f) * 360;
-    if (a < s0) a += 360;
-
-    GlStateManager.pushMatrix();
-    GlStateManager.disableAlpha();
-    GlStateManager.enableBlend();
-    GlStateManager.disableTexture2D();
-    GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-
-    GlStateManager.translate(0, animTop, 0);
-
-    Tessellator tessellator = Tessellator.getInstance();
-    BufferBuilder buffer = tessellator.getBuffer();
-    buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
-    boolean hasMouseOver = false;
-    ItemStack itemMouseOver = ItemStack.EMPTY;
-
-    if (!closing) {
-      selectedItem = -1;
-      for (int i = 0; i < numItems; i++) {
-        float s = (((i - 0.5f) / (float) numItems) + 0.25f) * 360;
-        float e = (((i + 0.5f) / (float) numItems) + 0.25f) * 360;
-        if (a >= s && a < e && d >= radiusIn && d < radiusOut) {
-          selectedItem = i;
-          break;
+  private void processClick(
+    boolean triggeredByMouse,
+    List<Category> categories
+  ) {
+    if (!hasToolbox() || !(closing || categories.isEmpty())) {
+      if (selectedItem >= 0) {
+        if (selectedCategory == null) {
+          processCategoryClick(triggeredByMouse, categories);
+        } else {
+          processSlotClick(triggeredByMouse);
+          animateClose();
         }
       }
     }
+  }
 
-    for (int i = 0; i < numItems; i++) {
-      float s = (((i - 0.5f) / (float) numItems) + 0.25f) * 360;
-      float e = (((i + 0.5f) / (float) numItems) + 0.25f) * 360;
-      if (selectedItem == i) {
-        drawPieArc(
-          buffer, x, y, zLevel, radiusIn, radiusOut, s, e, 255, 255, 255, 64
-        );
-        hasMouseOver = true;
-        ItemStack inSlot = ItemStack.EMPTY;
-        inSlot = items.get(i);
-        itemMouseOver = inSlot;
-      }
-      else
-        drawPieArc(
-          buffer, x, y, zLevel, radiusIn, radiusOut, s, e, 0, 0, 0, 64
-        );
+  private void processCategoryClick(
+    boolean triggeredByMouse,
+    List<Category> categories
+  ) {
+    if (triggeredByMouse) {
+      selectedCategory = categories.get(selectedItem);
+    } else {
+      animateClose();
     }
+  }
 
-    tessellator.draw();
-    GlStateManager.enableTexture2D();
+  private void processSlotClick(
+    boolean triggeredByMouse
+  ) {
+    int slotIndex = selectedCategory.slotIndices()[selectedItem];
+    SwapItems.swapItem(slotIndex, mc.player);
+    ImmersiveRadialMenu.channel.sendToServer(new SwapItems(slotIndex));
+  }
 
-    boolean hasItemInHand = inHand.getCount() > 0;
-    if (hasMouseOver)
-      if (hasItemInHand)
-        if (itemMouseOver.getCount() > 0)
-          drawCenteredString(
-            fontRenderer,
-            I18n.format("text.immersiveradialmenu.swap"),
-            width / 2, (height - fontRenderer.FONT_HEIGHT) / 2,
-            0xFFFFFFFF
+  private void animateClose() {
+    closing = true;
+    doneClosing = false;
+    startAnimation = Minecraft.getMinecraft().world.getTotalWorldTime()
+        + (double) Minecraft.getMinecraft().getRenderPartialTicks();
+  }
+
+  @Override
+  public void drawScreen(
+    int mouseX,
+    int mouseY,
+    float partialTicks
+  ) {
+    super.drawScreen(mouseX, mouseY, partialTicks);
+    List<Category> categories = mainHandCategories();
+    if (hasToolbox() && !categories.isEmpty()) {
+      final float OPEN_ANIMATION_LENGTH = 2.5f;
+      long worldTime = Minecraft.getMinecraft().world.getTotalWorldTime();
+      float animationTime = (float) (worldTime + partialTicks - startAnimation);
+      float openAnimation =
+          closing
+          ? 1.0f - animationTime / OPEN_ANIMATION_LENGTH
+          : animationTime / OPEN_ANIMATION_LENGTH;
+      if (closing && openAnimation <= 0.0f) {
+        doneClosing = true;
+      }
+      
+      float animProgress = MathHelper.clamp(openAnimation, 0, 1);
+      float radiusIn = Math.max(0.1f, 30 * animProgress);
+      float radiusOut = radiusIn * 2;
+      float itemRadius = (radiusIn + radiusOut) * 0.5f;
+      float animTop = (1 - animProgress) * height / 2.0f;
+      int x = width / 2;
+      int y = height / 2;
+
+      int numberOfSlices = selectedCategory == null ? categories.size() : selectedCategory.numberOfIndices();
+
+      double a = Math.toDegrees(Math.atan2(mouseY - y, mouseX - x));
+      double d = Math.sqrt(Math.pow(mouseX - x, 2) + Math.pow(mouseY - y, 2));
+      float s0 = (((0 - 0.5f) / (float) numberOfSlices) + 0.25f) * 360;
+      if (a < s0) {
+        a += 360;
+      }
+
+      GlStateManager.pushMatrix();
+      GlStateManager.disableAlpha();
+      GlStateManager.enableBlend();
+      GlStateManager.disableTexture2D();
+      GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+  
+      GlStateManager.translate(0, animTop, 0);
+
+      Tessellator tessellator = Tessellator.getInstance();
+      BufferBuilder buffer = tessellator.getBuffer();
+      buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+      boolean hasMouseOver = false;
+      ItemStack mousedOverItem = null;
+      Category mousedOverCategory = null;
+
+      if (!closing) {
+        selectedItem = -1;
+        for (int i = 0; i < numberOfSlices; i++) {
+          float s = (((i - 0.5f) / (float) numberOfSlices) + 0.25f) * 360;
+          float e = (((i + 0.5f) / (float) numberOfSlices) + 0.25f) * 360;
+          if (a >= s && a < e && d >= radiusIn && d < radiusOut) {
+            selectedItem = i;
+            break;
+          }
+        }
+      }
+
+      IItemHandler toolbox = toolbox();
+      for (int i = 0; i < numberOfSlices; i++) {
+        float s = (((i - 0.5f) / (float) numberOfSlices) + 0.25f) * 360;
+        float e = (((i + 0.5f) / (float) numberOfSlices) + 0.25f) * 360;
+        if (selectedItem == i) {
+          drawSlice(
+            buffer, x, y, zLevel, radiusIn, radiusOut, s, e, 255, 255, 255, 64
           );
+          hasMouseOver = true;
+          if (selectedCategory != null) {
+            mousedOverItem = toolbox.getStackInSlot(selectedCategory.slotIndices()[i]);
+          } else {
+            mousedOverCategory = categories.get(i);
+          }
+        }
         else
+          drawSlice(
+            buffer, x, y, zLevel, radiusIn, radiusOut, s, e, 0, 0, 0, 64
+          );
+      }
+
+      tessellator.draw();
+      GlStateManager.enableTexture2D();
+
+      if (hasMouseOver && mousedOverItem != null) {
+        if (!mc.player.getHeldItemMainhand().isEmpty()) {
+          if (!mousedOverItem.isEmpty()) {
+            drawCenteredString(
+              fontRenderer,
+              I18n.format("text.immersiveradialmenu.swap"),
+              width / 2, (height - fontRenderer.FONT_HEIGHT) / 2,
+              0xFFFFFFFF
+            );
+          } else {
+            drawCenteredString(
+              fontRenderer,
+              I18n.format("text.immersiveradialmenu.insert"),
+              width / 2, (height - fontRenderer.FONT_HEIGHT) / 2,
+              0xFFFFFFFF
+            );
+          }
+        } else {
           drawCenteredString(
             fontRenderer,
-            I18n.format("text.immersiveradialmenu.insert"),
+            I18n.format("text.immersiveradialmenu.extract"),
             width / 2, (height - fontRenderer.FONT_HEIGHT) / 2,
             0xFFFFFFFF
           );
-      else if (itemMouseOver.getCount() > 0)
+        }
+      } else if (hasMouseOver && mousedOverCategory != null) {
         drawCenteredString(
           fontRenderer,
-          I18n.format("text.immersiveradialmenu.extract"),
-          width / 2,
-          (height - fontRenderer.FONT_HEIGHT) / 2,
+          I18n.format(mousedOverCategory.unlocalisedName()),
+          width / 2, (height - fontRenderer.FONT_HEIGHT) / 2,
           0xFFFFFFFF
         );
-    
-    for (int i = minSlot; i < maxSlot; i++) {
-        ItemStack inSlot = toolbox.getStackInSlot(i);
-        if (inSlot.getCount() <= 0) {
+      }
+
+      if (selectedCategory != null) {
+        int[] slotIndices = selectedCategory.slotIndices();
+        for (int i = 0; i < slotIndices.length; i++) {
+          ItemStack inSlot = toolbox.getStackInSlot(slotIndices[i]);
+          if (inSlot.getCount() <= 0) {
             float angle1 =
-                ((i / (float) numItems) + 0.25f) * 2 * (float) Math.PI;
+                ((i / (float) selectedCategory.numberOfIndices()) + 0.25f) * 2 * (float) Math.PI;
             float posX = x + itemRadius * (float) Math.cos(angle1);
             float posY = y + itemRadius * (float) Math.sin(angle1);
             drawCenteredString(
@@ -294,41 +277,75 @@ public class GuiRadialMenu extends GuiScreen {
               (int)posY - fontRenderer.FONT_HEIGHT / 2,
               0x7FFFFFFF
             );
+          }
         }
-    }
-    
-    RenderHelper.enableGUIStandardItemLighting();
-    for (int i = 0; i < numItems; i++) {
-      float angle1 = ((i / (float) numItems) + 0.25f) * 2 * (float) Math.PI;
-      float posX = x - 8 + itemRadius * (float) Math.cos(angle1);
-      float posY = y - 8 + itemRadius * (float) Math.sin(angle1);
-      ItemStack inSlot = items.get(i);
-      if (inSlot.getCount() > 0) {
-          this.itemRender.renderItemAndEffectIntoGUI(
-            inSlot,
-            (int) posX,
-            (int) posY
-          );
-          this.itemRender.renderItemOverlayIntoGUI(
-            this.fontRenderer,
-            inSlot,
-            (int) posX,
-            (int) posY,
-            ""
-          );
+
+        RenderHelper.enableGUIStandardItemLighting();
+        for (int i = 0; i < slotIndices.length; i++) {
+          float angle1 = ((i / (float) selectedCategory.numberOfIndices()) + 0.25f) * 2 * (float) Math.PI;
+          float posX = x - 8 + itemRadius * (float) Math.cos(angle1);
+          float posY = y - 8 + itemRadius * (float) Math.sin(angle1);
+          ItemStack inSlot = toolbox.getStackInSlot(slotIndices[i]);
+          if (inSlot.getCount() > 0) {
+            this.itemRender.renderItemAndEffectIntoGUI(
+              inSlot,
+              (int) posX,
+              (int) posY
+            );
+            this.itemRender.renderItemOverlayIntoGUI(
+              this.fontRenderer,
+              inSlot,
+              (int) posX,
+              (int) posY,
+              ""
+            );
+          } else {
+            posX = x + itemRadius * (float) Math.cos(angle1);
+            posY = y + itemRadius * (float) Math.sin(angle1);
+            drawCenteredString(
+              fontRenderer,
+              I18n.format("text.immersiveradialmenu.empty"),
+              (int)posX,
+              (int)posY - fontRenderer.FONT_HEIGHT / 2,
+              0x7FFFFFFF
+            );
+          }
+        }
+        RenderHelper.disableStandardItemLighting();
+      } else {
+        RenderHelper.enableGUIStandardItemLighting();
+        for (int i = 0; i < categories.size(); i++) {
+          float angle1 = ((i / (float) categories.size()) + 0.25f) * 2 * (float) Math.PI;
+          float posX = x - 8 + itemRadius * (float) Math.cos(angle1);
+          float posY = y - 8 + itemRadius * (float) Math.sin(angle1);
+          ItemStack icon = categories.get(i).icon();
+          if (icon != null) {
+            this.itemRender.renderItemAndEffectIntoGUI(
+              icon,
+              (int) posX,
+              (int) posY
+            );
+            this.itemRender.renderItemOverlayIntoGUI(
+              this.fontRenderer,
+              icon,
+              (int) posX,
+              (int) posY,
+              ""
+            );
+          }
+        }
+        RenderHelper.disableStandardItemLighting();
+      }
+
+      GlStateManager.popMatrix();
+
+      if (mousedOverItem != null && mousedOverItem.getCount() > 0) {
+        renderToolTip(mousedOverItem, mouseX, mouseY);
       }
     }
-    RenderHelper.disableStandardItemLighting();
-
-    GlStateManager.popMatrix();
-
-    if (itemMouseOver.getCount() > 0)
-        renderToolTip(itemMouseOver, mouseX, mouseY);
   }
 
-  private static final float PRECISION = 5;
-
-  private void drawPieArc(
+  private void drawSlice(
     BufferBuilder buffer,
     float x,
     float y,
@@ -368,6 +385,18 @@ public class GuiRadialMenu extends GuiScreen {
           buffer.pos(pos2InX, pos2InY, z).color(r, g, b, a).endVertex();
           buffer.pos(pos2OutX, pos2OutY, z).color(r, g, b, a).endVertex();
       }
+  }
+
+  private boolean hasToolbox() {
+    return ToolboxFinder.findToolbox(mc.player) != null;
+  }
+
+  private IItemHandler toolbox() {
+    return ToolboxFinder.findToolbox(mc.player).handler();
+  }
+
+  private List<Category> mainHandCategories() {
+    return Category.categoriesFor(mc.player.getHeldItemMainhand());
   }
 
   @Override

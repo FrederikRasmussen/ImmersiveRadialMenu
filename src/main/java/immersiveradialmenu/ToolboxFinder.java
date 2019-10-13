@@ -3,17 +3,24 @@ package immersiveradialmenu;
 import blusunrize.immersiveengineering.common.items.ItemToolbox;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
-import net.minecraftforge.items.CapabilityItemHandler;
-import net.minecraftforge.items.IItemHandler;
+import net.minecraft.util.NonNullList;
 
 public class ToolboxFinder {
-  public static IItemHandler findToolbox(EntityPlayer player) {
-    ItemStack toolboxStack = player.getHeldItemOffhand();
-    if (toolboxStack.getItem() instanceof ItemToolbox)
-      return toolboxStack.getCapability(
-        CapabilityItemHandler.ITEM_HANDLER_CAPABILITY,
-        null
+  public static Toolbox findToolbox(EntityPlayer player) {
+    ItemStack offHandStack = player.getHeldItemOffhand();
+    if (offHandStack.getItem() instanceof ItemToolbox) {
+      return Toolbox.toolboxFromOffHand(
+        offHandStack
       );
+    }
+    NonNullList<ItemStack> inventory =
+        player.inventory.mainInventory;
+    for (int slot = 0; slot < inventory.size(); slot++) {
+      ItemStack slotStack = inventory.get(slot);
+      if (slotStack.getItem() instanceof ItemToolbox) {
+        return Toolbox.toolboxFromInventory(slotStack, slot);
+      }
+    }
     return null;
   }
 }

@@ -1,15 +1,12 @@
 package immersiveradialmenu.client;
 
 import java.util.List;
-import java.util.function.Predicate;
 
 import org.lwjgl.input.Keyboard;
 
-import blusunrize.immersiveengineering.api.tool.ToolboxHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.item.ItemStack;
-import net.minecraft.world.World;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -20,9 +17,6 @@ import immersiveradialmenu.CommonProxy;
 
 @Mod.EventBusSubscriber(Side.CLIENT)
 public class ClientProxy extends CommonProxy {
-  public static KeyBinding keyOpenToolMenu;
-  public static KeyBinding keyOpenFoodMenu;
-  public static KeyBinding keyOpenWiringMenu;
   public static KeyBinding keyOpenToolboxMenu;
 
   @Override
@@ -34,30 +28,6 @@ public class ClientProxy extends CommonProxy {
           "key.immersiveradialmenu.category"
         );
     ClientRegistry.registerKeyBinding(keyOpenToolboxMenu);
-
-    keyOpenToolMenu =
-        new KeyBinding(
-          "key.immersiveradialmenu.opentool",
-          Keyboard.KEY_U,
-          "key.immersiveradialmenu.category"
-        );
-    ClientRegistry.registerKeyBinding(keyOpenToolMenu);
-
-    keyOpenFoodMenu =
-        new KeyBinding(
-          "key.immersiveradialmenu.openfood",
-          Keyboard.KEY_F,
-          "key.immersiveradialmenu.category"
-        );
-    ClientRegistry.registerKeyBinding(keyOpenFoodMenu);
-    
-    keyOpenWiringMenu =
-        new KeyBinding(
-          "key.immersiveradialmenu.openwiring",
-          Keyboard.KEY_G,
-          "key.immersiveradialmenu.category"
-        );
-    ClientRegistry.registerKeyBinding(keyOpenWiringMenu);
   }
 
   @SubscribeEvent
@@ -69,56 +39,17 @@ public class ClientProxy extends CommonProxy {
         List<Category> categories = Category.categoriesFor(inHand);
         if (!categories.isEmpty()) {
           mc.displayGuiScreen(
-            new GuiRadialMenuCategories(keyOpenToolboxMenu)
+            new GuiRadialMenu(keyOpenToolboxMenu)
           );
         }
       }
     }
-
-    handleKeybind(
-      keyOpenFoodMenu,
-      itemStack -> ToolboxHandler.isFood(itemStack),
-      0, 3
-    );
-    handleKeybind(
-      keyOpenToolMenu,
-      itemStack -> ToolboxHandler.isTool(itemStack),
-      4, 10
-    );
-    final World world = Minecraft.getMinecraft().world;
-    handleKeybind(
-      keyOpenWiringMenu,
-      itemStack -> ToolboxHandler.isWiring(itemStack, world),
-      11, 16
-    );
   }
 
   public static void wipeOpen()
   {
-      while (
-        keyOpenToolMenu.isPressed()
-        || keyOpenFoodMenu.isPressed()
-        || keyOpenWiringMenu.isPressed()
-        || keyOpenToolboxMenu.isPressed()
-      ) {
+      while (keyOpenToolboxMenu.isPressed()) {
         
-      }
-  }
-
-  private static void handleKeybind(
-    KeyBinding keybind,
-    Predicate<ItemStack> predicate,
-    int minSlot,
-    int maxSlot
-  ) {
-    Minecraft mc = Minecraft.getMinecraft();
-    while (keybind.isPressed())
-      if (mc.currentScreen == null) {
-        ItemStack inHand = mc.player.getHeldItemMainhand();
-        if (predicate.test(inHand))
-          mc.displayGuiScreen(
-            new GuiRadialMenu(keybind, predicate, minSlot, maxSlot)
-          );
       }
   }
 }

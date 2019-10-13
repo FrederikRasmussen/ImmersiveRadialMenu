@@ -1,0 +1,16 @@
+[
+  {
+    "modid": "immersiveradialmenu",
+    "name": "Immersive Radial Menu",
+    "description": "Adds a radial menu for the Immersive Engineering toolbox.",
+    "version": "${version}",
+    "mcversion": "${mcversion}",
+    "url": "https://github.com/FrederikRasmussen/ImmersiveRadialMenu",
+    "updateUrl": "",
+    "authorList": [ "Frederik Rasmussen" ],
+    "credits": "",
+    "logofile": "",
+    "screenshots": [],
+    "dependencies": [ "immersiveengineering" ]
+  }
+]

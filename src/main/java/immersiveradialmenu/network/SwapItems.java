@@ -3,6 +3,7 @@ package immersiveradialmenu.network;
 import blusunrize.immersiveengineering.api.tool.ToolboxHandler;
 import blusunrize.immersiveengineering.common.items.ItemToolbox;
 import immersiveradialmenu.Category;
+import immersiveradialmenu.Toolbox;
 import immersiveradialmenu.ToolboxFinder;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
@@ -13,7 +14,6 @@ import net.minecraft.world.WorldServer;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessageHandler;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
-import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.IItemHandlerModifiable;
 
@@ -37,13 +37,13 @@ public class SwapItems implements IMessage {
   }
 
   public static void swapItem(int toolboxSlot, EntityPlayer player) {
-    ItemStack toolboxStack = player.getHeldItemOffhand();
+    Toolbox toolbox = ToolboxFinder.findToolbox(player);
+
+    ItemStack toolboxStack = toolbox.stack(player);
     if (!(toolboxStack.getItem() instanceof ItemToolbox))
       return;
-    IItemHandler toolbox = toolboxStack.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+    IItemHandler toolboxHandler = toolbox.handler();
 
-    if (toolbox == null)
-      return;
     if (toolboxSlot < 0)
       return;
 
@@ -51,10 +51,15 @@ public class SwapItems implements IMessage {
     if (!Category.itemStackValidInSlot(inHand, toolboxSlot))
       return;
 
-    ItemStack inSlot = toolbox.getStackInSlot(toolboxSlot);
+    ItemStack inSlot = toolboxHandler.getStackInSlot(toolboxSlot);
+
     player.setHeldItem(EnumHand.MAIN_HAND, inSlot);
-    ((IItemHandlerModifiable)toolbox).setStackInSlot(toolboxSlot, inHand);
-    player.setHeldItem(EnumHand.OFF_HAND, toolboxStack);
+    ((IItemHandlerModifiable)toolboxHandler).setStackInSlot(toolboxSlot, inHand);
+    if (toolbox.inOffHand()) {
+      player.setHeldItem(EnumHand.OFF_HAND, toolboxStack);
+    } else {
+      player.inventory.mainInventory.set(toolbox.inventorySlot(), toolboxStack);
+    }
   }
 
   public static class Handler implements IMessageHandler<SwapItems, IMessage> {

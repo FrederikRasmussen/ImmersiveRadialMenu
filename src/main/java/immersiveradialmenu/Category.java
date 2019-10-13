@@ -2,7 +2,6 @@ package immersiveradialmenu;
 
 import java.util.List;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import com.google.common.collect.Lists;
@@ -10,45 +9,54 @@ import com.google.common.collect.Lists;
 import blusunrize.immersiveengineering.api.tool.ToolboxHandler;
 import blusunrize.immersiveengineering.common.items.ItemToolbox;
 import net.minecraft.client.Minecraft;
+import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Item;
 
 public enum Category {
   TOOLS(
     ToolboxHandler::isTool,
     3, 10,
-    "desc.immersiveengineering.info.toolbox.tool"
+    "desc.immersiveengineering.info.toolbox.tool",
+    new ItemStack(Item.getByNameOrId("immersiveengineering:tool"), 1, 0)
   ),
   FOOD(
     ToolboxHandler::isFood,
     0, 3,
-    "desc.immersiveengineering.info.toolbox.food"
+    "desc.immersiveengineering.info.toolbox.food",
+    new ItemStack(Items.APPLE, 1, 0)
   ),
   WIRING(
     itemStack -> ToolboxHandler.isWiring(itemStack, Minecraft.getMinecraft().world),
     10, 16,
-    "desc.immersiveengineering.info.toolbox.wire"
+    "desc.immersiveengineering.info.toolbox.wire",
+    new ItemStack(Item.getByNameOrId("immersiveengineering:wirecoil"), 1, 0)
   ),
   ANYTHING(
     itemStack -> !(itemStack.getItem() instanceof ItemToolbox),
     16, 23,
-    "desc.immersiveengineering.info.toolbox.any"
+    "desc.immersiveengineering.info.toolbox.any",
+    new ItemStack(Item.getByNameOrId("immersiveengineering:wooden_device0"), 1, 0)
   );
 
   private Predicate<ItemStack> categoryMatcher;
   private int minSlotInclusive;
   private int maxSlotExclusive;
   private String unlocalisedName;
+  private ItemStack defaultIcon;
 
   private Category(
     Predicate<ItemStack> categoryMatcher,
     int minSlotInclusive,
     int maxSlotExclusive,
-    String unlocalisedName
+    String unlocalisedName,
+    ItemStack defaultIcon
   ) {
     this.categoryMatcher = categoryMatcher;
     this.minSlotInclusive = minSlotInclusive;
     this.maxSlotExclusive = maxSlotExclusive;
     this.unlocalisedName = unlocalisedName;
+    this.defaultIcon = defaultIcon;
   }
 
   private boolean matches(ItemStack itemStack) {
@@ -73,6 +81,10 @@ public enum Category {
     } else {
       return false;
     }
+  }
+
+  public ItemStack icon() {
+    return defaultIcon;
   }
 
   public static List<Category> categoriesFor(ItemStack itemStack) {
