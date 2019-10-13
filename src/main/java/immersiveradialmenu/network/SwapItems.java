@@ -2,6 +2,7 @@ package immersiveradialmenu.network;
 
 import blusunrize.immersiveengineering.api.tool.ToolboxHandler;
 import blusunrize.immersiveengineering.common.items.ItemToolbox;
+import immersiveradialmenu.Category;
 import immersiveradialmenu.ToolboxFinder;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
@@ -47,13 +48,9 @@ public class SwapItems implements IMessage {
       return;
 
     ItemStack inHand = player.getHeldItemMainhand();
-    if (toolboxSlot < 3 && !ToolboxHandler.isFood(inHand))
+    if (!Category.itemStackValidInSlot(inHand, toolboxSlot))
       return;
-    if (toolboxSlot >= 3 && toolboxSlot < 10 && !ToolboxHandler.isTool(inHand))
-      return;
-    if (toolboxSlot >= 10 && toolboxSlot < 16 && !ToolboxHandler.isWiring(inHand, player.world))
-      return;
-    
+
     ItemStack inSlot = toolbox.getStackInSlot(toolboxSlot);
     player.setHeldItem(EnumHand.MAIN_HAND, inSlot);
     ((IItemHandlerModifiable)toolbox).setStackInSlot(toolboxSlot, inHand);
@@ -63,7 +60,6 @@ public class SwapItems implements IMessage {
   public static class Handler implements IMessageHandler<SwapItems, IMessage> {
     @Override
     public IMessage onMessage(final SwapItems message, MessageContext ctx) {
-      System.out.println("Message sending");
       final EntityPlayerMP player = ctx.getServerHandler().player;
       final WorldServer world = (WorldServer) player.world;
 

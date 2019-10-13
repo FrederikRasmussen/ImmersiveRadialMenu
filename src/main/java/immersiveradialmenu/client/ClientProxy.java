@@ -1,5 +1,6 @@
 package immersiveradialmenu.client;
 
+import java.util.List;
 import java.util.function.Predicate;
 
 import org.lwjgl.input.Keyboard;
@@ -14,6 +15,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.InputEvent;
 import net.minecraftforge.fml.relauncher.Side;
+import immersiveradialmenu.Category;
 import immersiveradialmenu.CommonProxy;
 
 @Mod.EventBusSubscriber(Side.CLIENT)
@@ -21,13 +23,22 @@ public class ClientProxy extends CommonProxy {
   public static KeyBinding keyOpenToolMenu;
   public static KeyBinding keyOpenFoodMenu;
   public static KeyBinding keyOpenWiringMenu;
+  public static KeyBinding keyOpenToolboxMenu;
 
   @Override
   public void init() {
+    keyOpenToolboxMenu =
+        new KeyBinding(
+          "key.immersiveradialmenu.opentoolbox",
+          Keyboard.KEY_R,
+          "key.immersiveradialmenu.category"
+        );
+    ClientRegistry.registerKeyBinding(keyOpenToolboxMenu);
+
     keyOpenToolMenu =
         new KeyBinding(
           "key.immersiveradialmenu.opentool",
-          Keyboard.KEY_R,
+          Keyboard.KEY_U,
           "key.immersiveradialmenu.category"
         );
     ClientRegistry.registerKeyBinding(keyOpenToolMenu);
@@ -51,6 +62,19 @@ public class ClientProxy extends CommonProxy {
 
   @SubscribeEvent
   public static void handleKeys(InputEvent ev) {
+    while (keyOpenToolboxMenu.isPressed()) {
+      Minecraft mc = Minecraft.getMinecraft();
+      if (mc.currentScreen == null) {
+        ItemStack inHand = mc.player.getHeldItemMainhand();
+        List<Category> categories = Category.categoriesFor(inHand);
+        if (!categories.isEmpty()) {
+          mc.displayGuiScreen(
+            new GuiRadialMenuCategories(keyOpenToolboxMenu)
+          );
+        }
+      }
+    }
+
     handleKeybind(
       keyOpenFoodMenu,
       itemStack -> ToolboxHandler.isFood(itemStack),
@@ -75,6 +99,7 @@ public class ClientProxy extends CommonProxy {
         keyOpenToolMenu.isPressed()
         || keyOpenFoodMenu.isPressed()
         || keyOpenWiringMenu.isPressed()
+        || keyOpenToolboxMenu.isPressed()
       ) {
         
       }
