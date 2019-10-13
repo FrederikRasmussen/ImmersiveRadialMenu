@@ -52,17 +52,20 @@ public class ClientProxy extends CommonProxy {
   @SubscribeEvent
   public static void handleKeys(InputEvent ev) {
     handleKeybind(
-      keyOpenToolMenu,
-      itemStack -> ToolboxHandler.isTool(itemStack)
+      keyOpenFoodMenu,
+      itemStack -> ToolboxHandler.isFood(itemStack),
+      0, 3
     );
     handleKeybind(
-      keyOpenFoodMenu,
-      itemStack -> ToolboxHandler.isFood(itemStack)
+      keyOpenToolMenu,
+      itemStack -> ToolboxHandler.isTool(itemStack),
+      4, 10
     );
     final World world = Minecraft.getMinecraft().world;
     handleKeybind(
-      keyOpenToolMenu,
-      itemStack -> ToolboxHandler.isWiring(itemStack, world)
+      keyOpenWiringMenu,
+      itemStack -> ToolboxHandler.isWiring(itemStack, world),
+      11, 16
     );
   }
 
@@ -79,19 +82,26 @@ public class ClientProxy extends CommonProxy {
 
   private static void handleKeybind(
     KeyBinding keybind,
-    Predicate<ItemStack> predicate
+    Predicate<ItemStack> predicate,
+    int minSlot,
+    int maxSlot
   ) {
     Minecraft mc = Minecraft.getMinecraft();
     while (keybind.isPressed())
       if (mc.currentScreen == null) {
         ItemStack inHand = mc.player.getHeldItemMainhand();
         if (predicate.test(inHand))
-          mc.displayGuiScreen(new GuiRadialMenu(predicate));
+          mc.displayGuiScreen(
+            new GuiRadialMenu(keybind, predicate, minSlot, maxSlot)
+          );
       }
   }
 }
 
 /*
+Note: This code has been modified from David Quintana's solution.
+Below is the required copyright notice.
+
 Copyright (c) 2015, David Quintana <gigaherz@gmail.com>
 All rights reserved.
 
